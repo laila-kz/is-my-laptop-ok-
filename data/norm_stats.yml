@@ -1,0 +1,14 @@
+%YAML:1.0
+---
+feature_order:
+   - CPU_Usage_Percent
+   - Memory_Usage_Percent
+   - Disk_Usage_Percent
+mean:
+   - 42.906295776367188
+   - 0.
+   - 2.3125615354328006e+21
+std:
+   - 23.147871017456055
+   - 1.
+   - 1.

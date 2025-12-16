@@ -1,3 +1,0 @@
-"C:\Program Files\CMake\bin\cmake.exe" -E rm -f CMakeFiles\monitor.dir/objects.a
-C:\msys64\ucrt64\bin\ar.exe qc CMakeFiles\monitor.dir/objects.a @CMakeFiles\monitor.dir\objects1.rsp
-C:\msys64\ucrt64\bin\g++.exe -g -Wl,--whole-archive CMakeFiles\monitor.dir/objects.a -Wl,--no-whole-archive -o monitor.exe -Wl,--out-implib,libmonitor.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\monitor.dir\linkLibs.rsp

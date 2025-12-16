@@ -18,48 +18,17 @@ struct Data{
 
 
 // Extract numeric features
-    const std::string MODEL_OUTPUT_PATH = "svm_model.yml";
-    const std::string NORM_STATS_PATH = "norm_stats.yml";
-
-    // Determine CSV path: prefer argv[1], otherwise try common relative locations
-    std::string csvPath;
-    
-    std::vector<std::string> candidates = {
-            "system_performance_data.csv",
-            "data/system_performance_data.csv",
-            "data\\system_performance_data.csv",
-            "../data/system_performance_data.csv",
-            "../../data/system_performance_data.csv"
-    };
-    for (const auto &p : candidates) {
-        if (std::filesystem::exists(p)) {
-            csvPath = p;
-            break;
-        }
-    }
-    
-
-    if (csvPath.empty()) {
-        std::cerr << "Error: could not find 'system_performance_data.csv'.\nTried common locations and no path was provided.\n";
-        std::cerr << "Pass the CSV path as the first argument or place the file in the program working directory or in 'data/'.\n";
-        return -1;
-    }
-
-    std::ifstream file(csvPath);
-    if(!file.is_open()){
-        std::cerr << "Error opening file: " << csvPath << std::endl;
-        return -1;
-    }
+ 
 // Save the model
 
 // Save normalization parameters
 
 
 int main(){
-    const std:: string MODEL_OUTPUT_PATH = "svm_model.yml";
-    const std::string NORM_STATS_PATH = "norm_stats.yml";
+    const std:: string MODEL_OUTPUT_PATH = "models/svm_model.yml";
+    const std::string NORM_STATS_PATH = "data/norm_stats.yml";
 
-    const std::string DATA_FILE_PATH = "C:\\Users\\kheza\\Desktop\\hidden_desktop\\svm-learning\\data\\system_performance_data.csv";
+    const std::string DATA_FILE_PATH = "C:\\Users\\kheza\\Desktop\\hidden_desktop\\svm-learning\\data\\system_performance_data.csv";;
     std::ifstream file(DATA_FILE_PATH);
 
     if(!file.is_open()){
@@ -81,13 +50,13 @@ int main(){
         while (std::getline(ss, field, ',')) {
             row.push_back(field);
         }
-        if(row.size() !=3){
+        if(row.size() !=4){
             continue; // Skip malformed lines
         }
         Data data;
-        data.CPU_Usage_Percent = std::stof(row[0]);
-        data.Memory_Usage_Percent = std::stof(row[1]);
-        data.Disk_Usage_Percent = std::stof(row[2]);
+        data.CPU_Usage_Percent = std::stof(row[1]);
+        data.Memory_Usage_Percent = std::stof(row[2]);
+        data.Disk_Usage_Percent = std::stof(row[3]);
         samples.push_back(data);
             
 

@@ -1,4 +1,4 @@
 C:/Users/kheza/Desktop/hidden_desktop/svm-learning/build/CMakeFiles/train_svm.dir
 C:/Users/kheza/Desktop/hidden_desktop/svm-learning/build/CMakeFiles/monitor.dir
-C:/Users/kheza/Desktop/hidden_desktop/svm-learning/build/CMakeFiles/edit_cache.dir
-C:/Users/kheza/Desktop/hidden_desktop/svm-learning/build/CMakeFiles/rebuild_cache.dir
+C:/Users/kheza/Desktop/hidden_desktop/svm-learning/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/kheza/Desktop/hidden_desktop/svm-learning/build/CMakeFiles/ZERO_CHECK.dir
