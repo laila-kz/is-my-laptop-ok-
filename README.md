@@ -13,7 +13,7 @@ The project is built and run using **native Windows tools** (Visual Studio + CMa
 ---
 
 ## 📂 Project Structure
-
+```
 svm-learning/
 │
 ├── CMakeLists.txt
@@ -42,7 +42,7 @@ svm-learning/
 
 
 
-
+```
 ---
 
 ## ⚙️ Requirements
