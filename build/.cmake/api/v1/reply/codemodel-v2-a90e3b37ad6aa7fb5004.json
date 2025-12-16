@@ -1,0 +1,222 @@
+{
+	"configurations" : 
+	[
+		{
+			"abstractTargets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_calib3d::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_calib3d-Debug-224d18b4c17611c22a09.json",
+					"name" : "opencv_calib3d",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_core::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_core-Debug-74374e4b5baaa94f230e.json",
+					"name" : "opencv_core",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_dnn::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_dnn-Debug-34ef9eeb81051b29a0b6.json",
+					"name" : "opencv_dnn",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_features2d::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_features2d-Debug-ab7bc74190c7ffd465e1.json",
+					"name" : "opencv_features2d",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_flann::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_flann-Debug-e5943182eeb61b48f5fe.json",
+					"name" : "opencv_flann",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_gapi::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_gapi-Debug-4c959d1cfb7b86f78f23.json",
+					"name" : "opencv_gapi",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_highgui::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_highgui-Debug-604c80551111db184a63.json",
+					"name" : "opencv_highgui",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_imgcodecs::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_imgcodecs-Debug-37c0407fe6c513b5d2b4.json",
+					"name" : "opencv_imgcodecs",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_imgproc::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_imgproc-Debug-d76884265d54afc82f9b.json",
+					"name" : "opencv_imgproc",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_ml::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_ml-Debug-4b75111fc1f2ba7783f1.json",
+					"name" : "opencv_ml",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_objdetect::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_objdetect-Debug-c36ac21bca0f76f5217d.json",
+					"name" : "opencv_objdetect",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_photo::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_photo-Debug-5db3987edc7111423196.json",
+					"name" : "opencv_photo",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_stitching::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_stitching-Debug-5696ff8f5cfd6437545e.json",
+					"name" : "opencv_stitching",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_video::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_video-Debug-641400ab7b30a08d1005.json",
+					"name" : "opencv_video",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_videoio::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_videoio-Debug-549ef66a1dc2d4326ffd.json",
+					"name" : "opencv_videoio",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "opencv_world::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-opencv_world-Debug-8c5c9f9764283a9b614e.json",
+					"name" : "opencv_world",
+					"projectIndex" : 0
+				}
+			],
+			"directories" : 
+			[
+				{
+					"abstractTargetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15
+					],
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-f6f22219c74102c3da70.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.10"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"abstractTargetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6,
+						7,
+						8,
+						9,
+						10,
+						11,
+						12,
+						13,
+						14,
+						15
+					],
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "svm-learning",
+					"targetIndexes" : 
+					[
+						0,
+						1
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "monitor::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-monitor-Debug-56618182dd4f677d9489.json",
+					"name" : "monitor",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "train_svm::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-train_svm-Debug-76b004fa492d56d75688.json",
+					"name" : "train_svm",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "C:/Users/kheza/Desktop/hidden_desktop/svm-learning/build",
+		"source" : "C:/Users/kheza/Desktop/hidden_desktop/svm-learning"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 9
+	}
+}

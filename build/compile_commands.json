@@ -1,0 +1,14 @@
+[
+{
+  "directory": "C:/Users/kheza/Desktop/hidden_desktop/svm-learning/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\g++.exe  @CMakeFiles/train_svm.dir/includes_CXX.rsp -g -std=gnu++17 -o CMakeFiles\\train_svm.dir\\src\\train_svm.cpp.obj -c C:\\Users\\kheza\\Desktop\\hidden_desktop\\svm-learning\\src\\train_svm.cpp",
+  "file": "C:/Users/kheza/Desktop/hidden_desktop/svm-learning/src/train_svm.cpp",
+  "output": "CMakeFiles/train_svm.dir/src/train_svm.cpp.obj"
+},
+{
+  "directory": "C:/Users/kheza/Desktop/hidden_desktop/svm-learning/build",
+  "command": "C:\\msys64\\ucrt64\\bin\\g++.exe  @CMakeFiles/monitor.dir/includes_CXX.rsp -g -std=gnu++17 -o CMakeFiles\\monitor.dir\\src\\monitor.cpp.obj -c C:\\Users\\kheza\\Desktop\\hidden_desktop\\svm-learning\\src\\monitor.cpp",
+  "file": "C:/Users/kheza/Desktop/hidden_desktop/svm-learning/src/monitor.cpp",
+  "output": "CMakeFiles/monitor.dir/src/monitor.cpp.obj"
+}
+]
