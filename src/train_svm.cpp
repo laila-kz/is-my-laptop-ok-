@@ -1,167 +1,280 @@
-#include <iostream>
-#include <vector>
-#include <fstream>
-#include <string>
-#include <sstream>
+// Trains a one-class SVM on system performance samples collected by
+// scripts/collect-data.py, then persists both the model and the normalization
+// statistics so that monitor.cpp can reproduce the exact same feature scaling.
+
+#include <cstdlib>
 #include <filesystem>
-#include <opencv2/opencv.hpp>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <vector>
 
-struct Data{
-    float CPU_Usage_Percent;
-    float Memory_Usage_Percent;
+#include <opencv2/core.hpp>
+#include <opencv2/core/persistence.hpp>
+#include <opencv2/ml.hpp>
 
-    float Disk_Usage_Percent;
+namespace {
+
+constexpr const char* kDefaultCsvPath = "data/system_performance_data.csv";
+constexpr const char* kDefaultModelPath = "models/svm_model.yml";
+constexpr const char* kDefaultStatsPath = "data/norm_stats.yml";
+
+// Column order shared by collect-data.py, this trainer and monitor.cpp.
+const std::vector<std::string> kFeatureOrder = {
+    "CPU_Usage_Percent",
+    "Memory_Usage_Percent",
+    "Disk_Usage_Percent",
 };
 
-//steps:
-// Read CSV file
-
-
-// Extract numeric features
- 
-// Save the model
-
-// Save normalization parameters
-
-
-int main(){
-    const std:: string MODEL_OUTPUT_PATH = "models/svm_model.yml";
-    const std::string NORM_STATS_PATH = "data/norm_stats.yml";
-
-    const std::string DATA_FILE_PATH = "C:\\Users\\kheza\\Desktop\\hidden_desktop\\svm-learning\\data\\system_performance_data.csv";;
-    std::ifstream file(DATA_FILE_PATH);
-
-    if(!file.is_open()){
-        std::cerr << "Error opening file: " << DATA_FILE_PATH << std::endl;
-        return -1;
+// Parses a float without throwing on malformed input.
+bool parseFloat(const std::string& text, float& value) {
+    try {
+        std::size_t consumed = 0;
+        const float parsed = std::stof(text, &consumed);
+        if (consumed != text.size()) {
+            return false;
+        }
+        value = parsed;
+        return true;
+    } catch (const std::exception&) {
+        return false;
     }
-    
-    // Skip header row if it exists
-    std::string header;
-    std::getline(file, header);
-    std::vector<Data> samples;
-    std::string line;
+}
 
-    while(std::getline(file , line )){
-        std::stringstream ss(line);
+// Reads the CSV, skipping the header and any row that cannot be parsed.
+std::vector<std::vector<float>> readSamples(const std::string& path, int& skipped) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "Error: cannot open dataset: " << path << "\n"
+                  << "       run 'python scripts/collect-data.py' first, or pass a path.\n";
+        return {};
+    }
+
+    std::vector<std::vector<float>> samples;
+    std::string line;
+    std::getline(file, line);  // header
+    skipped = 0;
+
+    while (std::getline(file, line)) {
+        if (line.empty()) {
+            continue;
+        }
+
+        std::stringstream stream(line);
         std::string field;
         std::vector<std::string> row;
-        // 3. Parse each line using the comma delimiter
-        while (std::getline(ss, field, ',')) {
+        while (std::getline(stream, field, ',')) {
             row.push_back(field);
         }
-        if(row.size() !=4){
-            continue; // Skip malformed lines
+
+        if (row.size() != kFeatureOrder.size() + 1) {
+            ++skipped;
+            continue;
         }
-        Data data;
-        data.CPU_Usage_Percent = std::stof(row[1]);
-        data.Memory_Usage_Percent = std::stof(row[2]);
-        data.Disk_Usage_Percent = std::stof(row[3]);
-        samples.push_back(data);
-            
 
+        std::vector<float> features(kFeatureOrder.size());
+        bool valid = true;
+        for (std::size_t i = 0; i < features.size(); ++i) {
+            if (!parseFloat(row[i + 1], features[i])) {
+                valid = false;
+                break;
+            }
+        }
 
+        if (valid) {
+            samples.push_back(std::move(features));
+        } else {
+            ++skipped;
+        }
     }
 
-    file.close();   
+    return samples;
+}
+
+void printUsage(const char* executable) {
+    std::cout << "Usage: " << executable << " [options]\n\n"
+              << "Options:\n"
+              << "  --csv <path>     Training CSV (default: " << kDefaultCsvPath << ")\n"
+              << "  --model <path>   Output model YAML (default: " << kDefaultModelPath << ")\n"
+              << "  --stats <path>   Output normalization stats YAML (default: "
+              << kDefaultStatsPath << ")\n"
+              << "  --nu <value>     One-class SVM nu, 0 < nu <= 1 (default: 0.1)\n"
+              << "  --gamma <value>  RBF kernel gamma, gamma > 0 (default: 0.5)\n"
+              << "  -h, --help       Show this help\n";
+}
+
+std::string argumentValue(int argc, char* argv[], int& index, const char* flag) {
+    if (index + 1 >= argc) {
+        std::cerr << "Error: " << flag << " requires a value.\n";
+        std::exit(1);
+    }
+    return argv[++index];
+}
+
+double parseDouble(const std::string& flag, const std::string& text) {
+    try {
+        return std::stod(text);
+    } catch (const std::exception&) {
+        std::cerr << "Error: " << flag << " expects a number, got '" << text << "'.\n";
+        std::exit(1);
+    }
+}
+
+}  // namespace
+
+int main(int argc, char* argv[]) {
+    std::string csvPath = kDefaultCsvPath;
+    std::string modelPath = kDefaultModelPath;
+    std::string statsPath = kDefaultStatsPath;
+    double nu = 0.1;
+    double gamma = 0.5;
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--csv") {
+            csvPath = argumentValue(argc, argv, i, "--csv");
+        } else if (arg == "--model") {
+            modelPath = argumentValue(argc, argv, i, "--model");
+        } else if (arg == "--stats") {
+            statsPath = argumentValue(argc, argv, i, "--stats");
+        } else if (arg == "--nu") {
+            nu = parseDouble("--nu", argumentValue(argc, argv, i, "--nu"));
+        } else if (arg == "--gamma") {
+            gamma = parseDouble("--gamma", argumentValue(argc, argv, i, "--gamma"));
+        } else if (arg == "-h" || arg == "--help") {
+            printUsage(argv[0]);
+            return 0;
+        } else {
+            std::cerr << "Error: unknown argument '" << arg << "'\n\n";
+            printUsage(argv[0]);
+            return 1;
+        }
+    }
+
+    if (nu <= 0.0 || nu > 1.0) {
+        std::cerr << "Error: --nu must be in (0, 1].\n";
+        return 1;
+    }
+    if (gamma <= 0.0) {
+        std::cerr << "Error: --gamma must be > 0.\n";
+        return 1;
+    }
+
+    int skippedRows = 0;
+    const std::vector<std::vector<float>> samples = readSamples(csvPath, skippedRows);
     if (samples.empty()) {
-        std::cerr << "Error: no samples loaded from CSV." << std::endl;
-        return -1;
+        return 1;
     }
-
-    std::cout << "Loaded " << samples.size() << " samples." << std::endl;
-
-    //create the matrix to hold the data
 
     const int nbSamples = static_cast<int>(samples.size());
-    const int nbFeatures =3; // CPU, Memory, Disk
+    const int nbFeatures = static_cast<int>(kFeatureOrder.size());
 
-    cv::Mat featureMatrix(nbSamples, nbFeatures, CV_32F);
+    std::cout << "Dataset      : " << csvPath << "\n"
+              << "Samples      : " << nbSamples << "\n"
+              << "Skipped rows : " << skippedRows << "\n"
+              << "Features     : " << nbFeatures << "\n\n";
 
-    for(int i=0; i< nbSamples; ++i){
-        featureMatrix.at<float>(i,0) = samples[i].CPU_Usage_Percent;
-        featureMatrix.at<float>(i,1) = samples[i].Memory_Usage_Percent;
-        featureMatrix.at<float>(i,2) = samples[i].Disk_Usage_Percent;
+    cv::Mat features(nbSamples, nbFeatures, CV_32F);
+    for (int i = 0; i < nbSamples; ++i) {
+        for (int j = 0; j < nbFeatures; ++j) {
+            features.at<float>(i, j) = samples[i][j];
+        }
     }
 
-    std::cout << "Feature matrix created with size: " << featureMatrix.size() << std::endl;
+    // cv::meanStdDev() returns ONE value per channel, i.e. a 1x1 CV_64F matrix
+    // for a single-channel matrix - not one value per column. So it has to be
+    // called once per column to get per-feature statistics.
+    std::vector<float> means(nbFeatures);
+    std::vector<float> stds(nbFeatures);
+    for (int j = 0; j < nbFeatures; ++j) {
+        cv::Mat mean;
+        cv::Mat stddev;
+        cv::meanStdDev(features.col(j), mean, stddev);
+        if (mean.empty() || stddev.empty()) {
+            std::cerr << "Error: cv::meanStdDev returned nothing for column " << j << ".\n";
+            return 1;
+        }
 
-    // compute mean and std deviation
-    cv::Mat mean, stddev;
-    cv::meanStdDev(featureMatrix, mean, stddev);
+        means[j] = static_cast<float>(mean.at<double>(0, 0));
+        stds[j] = static_cast<float>(stddev.at<double>(0, 0));
 
-    // mean and stddev are returned as 1 x nbFeatures (type CV_64F)
-    float mean_cpu   = static_cast<float>(mean.at<double>(0, 0));
-    float mean_mem   = static_cast<float>(mean.at<double>(0, 1));
-    float mean_disk  = static_cast<float>(mean.at<double>(0, 2));
-
-    float std_cpu    = static_cast<float>(stddev.at<double>(0, 0));
-    float std_mem    = static_cast<float>(stddev.at<double>(0, 1));
-    float std_disk   = static_cast<float>(stddev.at<double>(0, 2));
-
-    // Safety check (avoid division by zero later)
-    if (std_cpu == 0)  std_cpu = 1.0f;
-    if (std_mem == 0)  std_mem = 1.0f;
-    if (std_disk == 0) std_disk = 1.0f;
-
-    //normalize the data
-    
-    for (int i = 0; i < featureMatrix.rows; ++i) {
-    featureMatrix.at<float>(i,0) = (featureMatrix.at<float>(i,0) - mean_cpu) / std_cpu;
-    featureMatrix.at<float>(i,1) = (featureMatrix.at<float>(i,1) - mean_mem) / std_mem;
-    featureMatrix.at<float>(i,2) = (featureMatrix.at<float>(i,2) - mean_disk) / std_disk;
-}
-    //save the normlised data
-    cv::FileStorage fs(NORM_STATS_PATH, cv::FileStorage::WRITE);
-
-    if (!fs.isOpened()) {
-        std::cerr << "Error: Unable to open normalization stats file for writing."
-                << std::endl;
-        return -1;
+        // Replace zero-variance features so normalization stays finite and the
+        // saved statistics remain usable by monitor.cpp.
+        if (stds[j] < 1e-6f) {
+            std::cout << "Warning: '" << kFeatureOrder[j]
+                      << "' has (near) zero variance in this dataset; using std = 1.0.\n";
+            stds[j] = 1.0f;
+        }
     }
 
-    // Save feature order (CRITICAL)
-    fs << "feature_order" << "["
-    << "CPU_Usage_Percent"
-    << "Memory_Usage_Percent"
-    << "Disk_Usage_Percent"
-    << "]";
+    std::cout << "\nFeature statistics\n" << std::string(52, '-') << "\n"
+              << std::left << std::setw(24) << "feature" << std::right << std::setw(12) << "mean"
+              << std::setw(12) << "std" << std::setw(12) << "min" << std::setw(12) << "max"
+              << "\n";
+    for (int j = 0; j < nbFeatures; ++j) {
+        double minValue = 0.0;
+        double maxValue = 0.0;
+        cv::minMaxIdx(features.col(j), &minValue, &maxValue);
 
-    // Save means
-    fs << "mean" << "["
-    << mean_cpu
-    << mean_mem
-    << mean_disk
-    << "]";
+        std::cout << std::left << std::setw(24) << kFeatureOrder[j] << std::right << std::setw(12)
+                  << means[j] << std::setw(12) << stds[j] << std::setw(12) << minValue
+                  << std::setw(12) << maxValue << "\n";
+    }
+    std::cout << std::string(52, '-') << "\n";
 
-    // Save standard deviations
-    fs << "std" << "["
-    << std_cpu
-    << std_mem
-    << std_disk
-    << "]";
+    // Normalize with the same statistics that are written to disk.
+    for (int j = 0; j < nbFeatures; ++j) {
+        features.col(j) = (features.col(j) - means[j]) / stds[j];
+    }
 
-    fs.release();
+    if (!cv::checkRange(features, true)) {
+        std::cerr << "Error: normalized data contains NaN or Inf values.\n";
+        return 1;
+    }
 
-    std::cout << "Normalization stats saved to: "
-            << NORM_STATS_PATH << std::endl;
+    // Persist normalization stats; monitor.cpp depends on this file.
+    const std::filesystem::path statsFile(statsPath);
+    if (statsFile.has_parent_path()) {
+        std::filesystem::create_directories(statsFile.parent_path());
+    }
 
+    cv::FileStorage statsWriter(statsPath, cv::FileStorage::WRITE);
+    if (!statsWriter.isOpened()) {
+        std::cerr << "Error: cannot write normalization stats to: " << statsPath << "\n";
+        return 1;
+    }
+    statsWriter << "feature_order" << "[";
+    for (const std::string& feature : kFeatureOrder) {
+        statsWriter << feature;
+    }
+    statsWriter << "]";
+    statsWriter << "mean" << means;
+    statsWriter << "std" << stds;
+    statsWriter.release();
+    std::cout << "\nNormalization stats saved to: " << statsPath << "\n";
 
-    // Train one-class SVM
+    // One-class SVM learns the boundary of "normal" behaviour; anything outside
+    // the learned region is reported as an anomaly.
     cv::Ptr<cv::ml::SVM> svm = cv::ml::SVM::create();
     svm->setType(cv::ml::SVM::ONE_CLASS);
     svm->setKernel(cv::ml::SVM::RBF);
-    svm->setNu(0.1); // Set the nu parameter (adjustable)
-    svm->setGamma(0.5); // Set the gamma parameter (adjustable)
+    svm->setNu(nu);
+    svm->setGamma(gamma);
+    svm->train(features, cv::ml::ROW_SAMPLE, cv::Mat());
 
-    svm->train(featureMatrix, cv::ml::ROW_SAMPLE, cv::Mat());
-    //train the SVM model
-    std::cout << "SVM training completed." << std::endl;
-    //save the model
-    svm->save(MODEL_OUTPUT_PATH);
-    std::cout << "SVM model saved to: " << MODEL_OUTPUT_PATH << std::endl;
+    const std::filesystem::path modelFile(modelPath);
+    if (modelFile.has_parent_path()) {
+        std::filesystem::create_directories(modelFile.parent_path());
+    }
 
+    svm->save(modelPath);
+    std::cout << "SVM model saved to      : " << modelPath << "\n"
+              << "  type                 : ONE_CLASS (RBF kernel)\n"
+              << "  nu / gamma           : " << nu << " / " << gamma << "\n"
+              << "  support vectors      : " << svm->getSupportVectors().rows << "\n";
 
-
+    std::cout << "\nNext step: run monitor.exe to score live samples against this model.\n";
     return 0;
 }

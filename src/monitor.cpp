@@ -1,141 +1,318 @@
-#include <opencv2/opencv.hpp>
+// Loads the trained one-class SVM and its normalization stats, then scores
+// system performance samples to decide whether the laptop is behaving normally.
+//
+// Usage:
+//   monitor.exe [cpu memory disk]...     score explicit values (percentages)
+//   monitor.exe --csv <path> [interval]  score every row of a CSV
+//
+// With no arguments the bundled demo sample (55 / 65 / 75) is scored.
+
+#include <chrono>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <thread>
 #include <vector>
 
-//Goal of monitor.cpp
-//Read live system metrics, normalize them, and decide if the laptop is behaving normally or not.
+#include <opencv2/core.hpp>
+#include <opencv2/core/persistence.hpp>
+#include <opencv2/ml.hpp>
 
-const std::string MODEL_PATH = "svm_model.yml";
-const std::string NORM_STATS_PATH = "norm_stats.yml";
+namespace {
 
-struct Stats {
-    std::vector<std::string> feature_order;
-    cv::Mat mean;
-    cv::Mat stdev;
+constexpr const char* kDefaultModelPath = "models/svm_model.yml";
+constexpr const char* kDefaultStatsPath = "data/norm_stats.yml";
+
+struct NormalizationStats {
+    std::vector<std::string> featureOrder;
+    std::vector<float> mean;
+    std::vector<float> stdev;
 };
 
-bool loadNormalizationStats(const std::string& path, Stats& stats) {
-    cv::FileStorage fs(path, cv::FileStorage::READ);
-    
-    if (!fs.isOpened()) {
-        std::cerr << "Error: Cannot open normalization stats file: " << path << std::endl;
+bool readSequence(cv::FileNode node, std::vector<float>& out) {
+    if (!node.isSeq()) {
         return false;
     }
-    
-    // Read feature order
-    cv::FileNode order_node = fs["feature_order"];
-    if (order_node.isSeq()) {
-        for (size_t i = 0; i < order_node.size(); ++i) {
-            stats.feature_order.push_back(static_cast<std::string>(order_node[i]));
-        }
+    out.clear();
+    out.reserve(static_cast<std::size_t>(node.size()));
+    for (int i = 0; i < node.size(); ++i) {
+        out.push_back(static_cast<float>(static_cast<double>(node[i])));
     }
-    
-    // Read mean values
-    cv::FileNode mean_node = fs["mean"];
-    if (mean_node.isSeq()) {
-        stats.mean = cv::Mat(1, mean_node.size(), CV_32F);
-        for (int i = 0; i < mean_node.size(); ++i) {
-            stats.mean.at<float>(0, i) = static_cast<float>(mean_node[i]);
-        }
-    }
-    
-    // Read std deviation values
-    cv::FileNode std_node = fs["std"];
-    if (std_node.isSeq()) {
-        stats.stdev = cv::Mat(1, std_node.size(), CV_32F);
-        for (int i = 0; i < std_node.size(); ++i) {
-            stats.stdev.at<float>(0, i) = static_cast<float>(std_node[i]);
-        }
-    }
-    
-    fs.release();
     return true;
 }
 
-cv::Mat normalizeSample(const cv::Mat& sample, const Stats& stats) {
-    cv::Mat normalized = sample.clone();
-    
-    for (int i = 0; i < sample.cols; ++i) {
-        float mean_val = stats.mean.at<float>(0, i);
-        float std_val = stats.stdev.at<float>(0, i);
-        
-        if (std_val == 0) std_val = 1.0f; // Avoid division by zero
-        
-        normalized.at<float>(0, i) = (sample.at<float>(0, i) - mean_val) / std_val;
+// Loads feature order, mean and standard deviation used during training.
+bool loadNormalizationStats(const std::string& path, NormalizationStats& stats) {
+    cv::FileStorage file(path, cv::FileStorage::READ);
+    if (!file.isOpened()) {
+        std::cerr << "Error: cannot open normalization stats: " << path << "\n"
+                  << "       run train_svm.exe first.\n";
+        return false;
     }
-    
+
+    cv::FileNode orderNode = file["feature_order"];
+    if (!orderNode.isSeq()) {
+        std::cerr << "Error: '" << path << "' has no feature_order sequence.\n";
+        return false;
+    }
+    for (int i = 0; i < orderNode.size(); ++i) {
+        stats.featureOrder.push_back(static_cast<std::string>(orderNode[i]));
+    }
+
+    if (!readSequence(file["mean"], stats.mean) || !readSequence(file["std"], stats.stdev)) {
+        std::cerr << "Error: '" << path << "' is missing a valid mean/std sequence.\n";
+        return false;
+    }
+
+    file.release();
+
+    if (stats.mean.size() != stats.stdev.size()) {
+        std::cerr << "Error: mean and std sizes differ (" << stats.mean.size() << " vs "
+                  << stats.stdev.size() << ").\n";
+        return false;
+    }
+    if (!stats.featureOrder.empty() && stats.featureOrder.size() != stats.mean.size()) {
+        std::cerr << "Error: feature_order has " << stats.featureOrder.size()
+                  << " entries but mean/std have " << stats.mean.size() << ".\n";
+        return false;
+    }
+    return true;
+}
+
+// Applies the training-time scaling: z = (x - mean) / std.
+std::vector<float> normalize(const std::vector<float>& sample, const NormalizationStats& stats) {
+    std::vector<float> normalized(sample.size());
+    for (std::size_t i = 0; i < sample.size(); ++i) {
+        const float stddev = (i < stats.stdev.size() && stats.stdev[i] != 0.0f) ? stats.stdev[i]
+                                                                               : 1.0f;
+        const float mean = (i < stats.mean.size()) ? stats.mean[i] : 0.0f;
+        normalized[i] = (sample[i] - mean) / stddev;
+    }
     return normalized;
 }
 
-int main() {
-    // Load normalization stats
-    Stats stats;
-    if (!loadNormalizationStats(NORM_STATS_PATH, stats)) {
-        return -1;
+std::string featureName(const NormalizationStats& stats, std::size_t index) {
+    return index < stats.featureOrder.size() ? stats.featureOrder[index]
+                                             : "feature_" + std::to_string(index);
+}
+
+void printFeatureStats(const NormalizationStats& stats) {
+    std::cout << "Normalization stats\n" << std::string(52, '-') << "\n"
+              << std::left << std::setw(24) << "feature" << std::right << std::setw(12) << "mean"
+              << std::setw(12) << "std" << "\n";
+    for (std::size_t i = 0; i < stats.mean.size(); ++i) {
+        std::cout << std::left << std::setw(24) << featureName(stats, i) << std::right
+                  << std::setw(12) << stats.mean[i] << std::setw(12) << stats.stdev[i] << "\n";
     }
-    
-    std::cout << "Loaded normalization stats. Feature order: ";
-    for (const auto& feature : stats.feature_order) {
-        std::cout << feature << " ";
-    }
-    std::cout << std::endl;
-    // Basic validation of normalization stats
-    if (stats.mean.empty() || stats.stdev.empty()) {
-        std::cerr << "Error: normalization stats are empty or malformed." << std::endl;
-        return -1;
-    }
-    if (stats.mean.cols != stats.stdev.cols) {
-        std::cerr << "Error: mean and std size mismatch." << std::endl;
-        return -1;
-    }
-    
-    // Load SVM model
-    cv::Ptr<cv::ml::SVM> svm = cv::ml::SVM::load(MODEL_PATH);
-    if (svm.empty()) {
-        std::cerr << "Error: Cannot load SVM model from: " << MODEL_PATH << std::endl;
-        return -1;
-    }
-    
-    std::cout << "SVM model loaded successfully!" << std::endl;
-    
-    // Example: Monitor a single sample
-    // In real implementation, you would get these from system monitoring
-    int nFeatures = stats.mean.cols;
-    cv::Mat sample(1, nFeatures, CV_32F);
-    // Populate with example values (or real monitoring values)
-    if (nFeatures >= 3) {
-        sample.at<float>(0, 0) = 55.0f;  // CPU usage
-        sample.at<float>(0, 1) = 65.0f;  // Memory usage
-        sample.at<float>(0, 2) = 75.0f;  // Disk usage
-        for (int i = 3; i < nFeatures; ++i) sample.at<float>(0, i) = 0.0f;
-    } else {
-        for (int i = 0; i < nFeatures; ++i) sample.at<float>(0, i) = 0.0f;
+    std::cout << std::string(52, '-') << "\n";
+}
+
+// Scores one sample; returns the SVM response (1 = inside, 0 = outside).
+float score(const cv::ml::SVM& svm,
+            const NormalizationStats& stats,
+            const std::vector<float>& sample) {
+    if (sample.size() != stats.mean.size()) {
+        std::cerr << "Error: expected " << stats.mean.size() << " features, got " << sample.size()
+                  << ".\n";
+        return 0.0f;
     }
 
-    std::cout << "\nMonitoring sample:" << std::endl;
-    for (int i = 0; i < sample.cols; ++i) {
-        std::cout << stats.feature_order.size() << i ? stats.feature_order[i] : std::to_string(i);
-        std::cout << ": " << sample.at<float>(0, i) << "%";
-        if (i + 1 < sample.cols) std::cout << ", ";
+    const std::vector<float> normalized = normalize(sample, stats);
+
+    cv::Mat row(1, static_cast<int>(normalized.size()), CV_32F);
+    for (std::size_t i = 0; i < normalized.size(); ++i) {
+        row.at<float>(0, static_cast<int>(i)) = normalized[i];
     }
-    std::cout << std::endl;
-    
-    // Normalize the sample
-    cv::Mat normalized = normalizeSample(sample, stats);
-    
-    // Predict using SVM
-    float response = svm->predict(normalized);
-    
-    // For one-class SVM:
-    // response = +1 : normal (inside the learned region)
-    // response = -1 : anomaly (outside the learned region)
-    
-    std::cout << "SVM response: " << response << std::endl;
-    if (response > 0) {
-        std::cout << "Status: NORMAL" << std::endl;
-    } else {
-        std::cout << "Status: ANOMALY DETECTED!" << std::endl;
+
+    std::cout << "\nSample\n" << std::string(52, '-') << "\n"
+              << std::left << std::setw(24) << "feature" << std::right << std::setw(14)
+              << "raw" << std::setw(14) << "normalized" << "\n";
+    for (std::size_t i = 0; i < normalized.size(); ++i) {
+        std::cout << std::left << std::setw(24) << featureName(stats, i) << std::right
+                  << std::setw(14) << sample[i] << std::setw(14) << normalized[i] << "\n";
     }
-    
+    std::cout << std::string(52, '-') << "\n";
+
+    // cv::ml::SVM::predict() returns 1 for a sample inside the learned region
+    // and 0 for one outside it. The old two-argument overload that exposed the
+    // raw decision value was removed in OpenCV 4.
+    const float response = svm.predict(row);
+    std::cout << "SVM response   : " << std::fixed << std::setprecision(3) << response << "\n"
+              << "Status         : " << (response > 0 ? "NORMAL" : "ANOMALY DETECTED") << "\n";
+    return response;
+}
+
+int scoreCsv(const std::string& path,
+             const cv::ml::SVM& svm,
+             const NormalizationStats& stats,
+             int intervalSeconds) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "Error: cannot open CSV: " << path << "\n";
+        return 1;
+    }
+
+    std::string line;
+    std::getline(file, line);  // header
+
+    int anomalies = 0;
+    int total = 0;
+    while (std::getline(file, line)) {
+        if (line.empty()) {
+            continue;
+        }
+
+        std::stringstream stream(line);
+        std::string field;
+        std::vector<std::string> row;
+        while (std::getline(stream, field, ',')) {
+            row.push_back(field);
+        }
+        if (row.size() != stats.mean.size() + 1) {
+            continue;
+        }
+
+        std::vector<float> sample;
+        sample.reserve(stats.mean.size());
+        bool valid = true;
+        for (std::size_t i = 1; i < row.size(); ++i) {
+            try {
+                sample.push_back(std::stof(row[i]));
+            } catch (const std::exception&) {
+                valid = false;
+                break;
+            }
+        }
+        if (!valid) {
+            continue;
+        }
+
+        ++total;
+        const float response = score(svm, stats, sample);
+        if (response <= 0) {
+            ++anomalies;
+        }
+
+        if (intervalSeconds > 0) {
+            std::this_thread::sleep_for(std::chrono::seconds(intervalSeconds));
+        }
+    }
+
+    std::cout << "\nScored " << total << " samples, " << anomalies << " flagged as anomalies.\n";
+    return 0;
+}
+
+void printUsage(const char* executable) {
+    std::cout << "Usage: " << executable << " [options] [values]\n\n"
+              << "Options:\n"
+              << "  --csv <path>       Score every row of a CSV file\n"
+              << "  --interval <sec>   Pause between CSV rows (default: 0)\n"
+              << "  --model <path>     Model YAML (default: " << kDefaultModelPath << ")\n"
+              << "  --stats <path>     Normalization stats YAML (default: " << kDefaultStatsPath
+              << ")\n"
+              << "  -h, --help        Show this help\n\n"
+              << "Examples:\n"
+              << "  " << executable << " 55 65 75\n"
+              << "  " << executable << " --csv data/system_performance_data.csv\n";
+}
+
+std::string argumentValue(int argc, char* argv[], int& index, const char* flag) {
+    if (index + 1 >= argc) {
+        std::cerr << "Error: " << flag << " requires a value.\n";
+        std::exit(1);
+    }
+    return argv[++index];
+}
+
+int parseInteger(const std::string& flag, const std::string& text) {
+    try {
+        return std::stoi(text);
+    } catch (const std::exception&) {
+        std::cerr << "Error: " << flag << " expects an integer, got '" << text << "'.\n";
+        std::exit(1);
+    }
+}
+
+}  // namespace
+
+int main(int argc, char* argv[]) {
+    std::string modelPath = kDefaultModelPath;
+    std::string statsPath = kDefaultStatsPath;
+    std::string csvPath;
+    int intervalSeconds = 0;
+    std::vector<float> values;
+
+    for (int i = 1; i < argc; ++i) {
+        const std::string arg = argv[i];
+        if (arg == "--csv") {
+            csvPath = argumentValue(argc, argv, i, "--csv");
+        } else if (arg == "--interval") {
+            intervalSeconds = parseInteger("--interval", argumentValue(argc, argv, i, "--interval"));
+        } else if (arg == "--model") {
+            modelPath = argumentValue(argc, argv, i, "--model");
+        } else if (arg == "--stats") {
+            statsPath = argumentValue(argc, argv, i, "--stats");
+        } else if (arg == "-h" || arg == "--help") {
+            printUsage(argv[0]);
+            return 0;
+        } else {
+            try {
+                values.push_back(std::stof(arg));
+            } catch (const std::exception&) {
+                std::cerr << "Error: unknown argument '" << arg << "'\n\n";
+                printUsage(argv[0]);
+                return 1;
+            }
+        }
+    }
+
+    if (!std::filesystem::exists(modelPath) || !std::filesystem::exists(statsPath)) {
+        std::cerr << "Error: model or stats file is missing. Train first: train_svm.exe\n";
+        return 1;
+    }
+
+    NormalizationStats stats;
+    if (!loadNormalizationStats(statsPath, stats)) {
+        return 1;
+    }
+
+    cv::Ptr<cv::ml::SVM> svm = cv::ml::SVM::load(modelPath);
+    if (svm.empty()) {
+        std::cerr << "Error: cannot load SVM model from: " << modelPath << "\n";
+        return 1;
+    }
+
+    const int expected = static_cast<int>(stats.mean.size());
+    if (svm->getVarCount() != expected) {
+        std::cerr << "Error: model expects " << svm->getVarCount() << " features but stats have "
+                  << expected << ".\n";
+        return 1;
+    }
+
+    std::cout << "Model : " << modelPath << "\n"
+              << "Stats : " << statsPath << "\n";
+    printFeatureStats(stats);
+
+    if (!csvPath.empty()) {
+        return scoreCsv(csvPath, *svm, stats, intervalSeconds);
+    }
+
+    if (values.empty()) {
+        std::cout << "\nNo sample supplied; scoring the built-in demo sample "
+                     "(55 / 65 / 75).\n"
+                  << "Pass real values, e.g. monitor.exe 55 65 75\n";
+        values = {55.0f, 65.0f, 75.0f};
+    }
+
+    if (static_cast<int>(values.size()) != expected) {
+        std::cerr << "Error: expected " << expected << " values, got " << values.size() << ".\n";
+        return 1;
+    }
+
+    score(*svm, stats, values);
     return 0;
 }

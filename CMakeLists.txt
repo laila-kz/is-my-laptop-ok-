@@ -1,32 +1,31 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.20)
 
-# Project name
-project(svm-learning)
+project(is-my-laptop-ok
+    VERSION 1.0.0
+    DESCRIPTION "One-class SVM health check for laptop CPU / memory / disk usage"
+    LANGUAGES CXX
+)
 
-# C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Find OpenCV
-find_package(OpenCV REQUIRED)
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
 
-# Include OpenCV headers
-include_directories(${OpenCV_INCLUDE_DIRS})
+find_package(OpenCV REQUIRED COMPONENTS core ml)
 
-# ---- Training executable ----
-add_executable(train_svm
-    src/train_svm.cpp
-)
+add_executable(train_svm src/train_svm.cpp)
+add_executable(monitor src/monitor.cpp)
 
-target_link_libraries(train_svm
-    ${OpenCV_LIBS}
-)
+foreach(target train_svm monitor)
+    target_include_directories(${target} PRIVATE ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(${target} PRIVATE ${OpenCV_LIBS})
 
-# ---- Monitoring executable ----
-add_executable(monitor
-    src/monitor.cpp
-)
-
-target_link_libraries(monitor
-    ${OpenCV_LIBS}
-)
+    if(MSVC)
+        target_compile_options(${target} PRIVATE /W4 /permissive-)
+    else()
+        target_compile_options(${target} PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+endforeach()

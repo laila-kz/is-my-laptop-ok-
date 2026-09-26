@@ -1,0 +1,48 @@
+# ---- CMake / build output ----
+build/
+out/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.vcxproj.user
+
+# ---- Compiled objects / binaries ----
+*.obj
+*.o
+*.pdb
+*.ilk
+*.idb
+*.exe
+*.dll
+*.lib
+*.exp
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# ---- Editors / OS ----
+.vs/
+.vscode/
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ---- Collected datasets (regenerate with scripts/collect-data.py) ----
+# The bundled sample run is kept; ignore any new captures.
+data/system_performance_data_*.csv
+data/*.local.csv
+
+# ---- Logs / temp ----
+*.log
+*.tmp
